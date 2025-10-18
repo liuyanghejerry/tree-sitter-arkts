@@ -28,6 +28,7 @@ module.exports = grammar({
     [$.function_expression, $.function_declaration],  // 函数表达式与函数声明的歧义
     [$.if_statement, $.statement],
     [$.ui_if_statement, $.statement],  // ui_if_statement 与 statement 的歧义
+    [$.conditional_expression, $.parameter],  // 条件表达式与可选参数的歧义
     // 以下是 ArkTS UI 相关的必需冲突
     [$.modifier_chain_expression, $.member_expression],  // 修饰符链 `.xxx()` 与成员访问 `.xxx` 的歧义
     [$.block_statement, $.extend_function_body],  // 普通函数体与 @Extend 函数体的歧义
@@ -326,7 +327,7 @@ module.exports = grammar({
     // 组件参数
     component_parameters: $ => seq(
       '{',
-      commaSep($.component_parameter),
+      commaSepTrailing($.component_parameter),
       '}'
     ),
 
@@ -434,14 +435,14 @@ module.exports = grammar({
       $.expression
     )),
 
-    // 条件表达式
-    conditional_expression: $ => prec.right(2, seq(
+    // 条件表达式 - 使用 prec.dynamic 确保在有歧义时优先解析为条件表达式
+    conditional_expression: $ => prec.dynamic(9, prec.right(9, seq(
       $.expression,
       '?',
       $.expression,
       ':',
       $.expression
-    )),
+    ))),
 
     // @ 表达式（用于装饰器冲突解决）
     at_expression: $ => seq('@', $.expression),
@@ -786,11 +787,20 @@ module.exports = grammar({
 
     // 成员表达式 - 降低优先级，避免与修饰符链冲突
     // 支持可选链 ?.
-    member_expression: $ => prec.left(1, seq(
-      $.expression,
-      choice('.', '?.'),  // 支持 . 和 ?.
-      $.identifier
-    )),
+    member_expression: $ => choice(
+      // 普通成员访问
+      prec.left(1, seq(
+        $.expression,
+        '.',
+        $.identifier
+      )),
+      // 可选链成员访问 - 使用明确的 '?.' token 避免与条件表达式冲突
+      prec.left(1, seq(
+        $.expression,
+        '?.',
+        $.identifier
+      ))
+    ),
 
     // 索引访问表达式 - arr[index]
     subscript_expression: $ => prec.left(19, seq(
@@ -1050,4 +1060,13 @@ module.exports = grammar({
 // 辅助函数
 function commaSep(rule) {
   return optional(seq(rule, repeat(seq(',', rule))));
+}
+
+// 支持尾随逗号的辅助函数
+function commaSepTrailing(rule) {
+  return optional(seq(
+    rule,
+    repeat(seq(',', rule)),
+    optional(',')
+  ));
 }

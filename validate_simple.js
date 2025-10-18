@@ -23,17 +23,20 @@
  *   node validate_simple.js [目录路径] --no-report     # 仅显示不保存
  *   node validate_simple.js [目录路径] --json          # JSON格式输出
  *   node validate_simple.js [目录路径] --strict        # 严格模式（分号必须）
+ *   node validate_simple.js [目录路径] --preprocess-asi # 解析前进行轻量ASI预处理（不改动源文件）
  */
 
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
+const os = require('os');
 
 // 配置
 const targetDir = process.argv[2] || './examples';
 const jsonOutput = process.argv.includes('--json');
 const noReport = process.argv.includes('--no-report');
 const strictMode = process.argv.includes('--strict');
+const preprocessASI = process.argv.includes('--preprocess-asi');
 let outputFile = null;
 
 // 解析 --output 参数
@@ -90,6 +93,115 @@ function findEtsFiles(dir, fileList = []) {
 }
 
 /**
+ * 轻量 ASI 预处理：为常见的“变量声明赋值为对象字面量且缺失分号”的情况补分号
+ * 不修改源文件，返回一个临时文件路径用于解析
+ */
+function preprocessASIFile(filePath) {
+  const content = fs.readFileSync(filePath, 'utf-8');
+  const lines = content.split(/\r?\n/);
+
+  let inDecl = false;           // 是否处于变量声明赋值扫描中
+  let sawAssign = false;        // 是否遇到 '='
+  let braceBalance = 0;         // 花括号 {}
+  let bracketBalance = 0;       // 方括号 []
+  let parenBalance = 0;         // 小括号 ()
+  let templateBalance = 0;      // 反引号模板字符串 ``, 计数奇偶
+
+  const countChar = (line, ch) => (line.match(new RegExp('\\' + ch, 'g')) || []).length;
+  const endsWithNoComment = (line, re) => {
+    // 仅在行尾没有行内注释时认为安全（避免插入到注释后）
+    const withoutTrailingSpaces = line.replace(/\s+$/, '');
+    return re.test(withoutTrailingSpaces) && !/\/\//.test(withoutTrailingSpaces);
+  };
+  const isSimpleLiteralEnd = (line) => {
+    const t = line.trim();
+    // 数字字面量
+    if (/\b\d+(\.\d+)?([eE][+-]?\d+)?\s*$/.test(t)) return true;
+    // 布尔/空值字面量
+    if (/(?:^|\s)(true|false|null)\s*$/.test(t)) return true;
+    // 简单字符串字面量（不考虑跨行，预处理仅在行尾闭合时触发）
+    if (/("[^"\\]*(?:\\.[^"\\]*)*"|'[^'\\]*(?:\\.[^'\\]*)*')\s*$/.test(t)) return true;
+    // 模板字符串：当前行内闭合
+    if (/`[^`]*`\s*$/.test(t)) return true;
+    return false;
+  };
+
+  const processed = lines.map((line, idx) => {
+    const trimmed = line.trim();
+
+    // 进入声明：以 var/let/const 开头，包含 '='，且本行末尾未分号
+    if (!inDecl && /^(const|let|var)\b/.test(trimmed) && /=/.test(line) && !/;\s*$/.test(line)) {
+      // 预先统计本行的符号平衡
+      braceBalance = countChar(line, '{') - countChar(line, '}');
+      bracketBalance = countChar(line, '[') - countChar(line, ']');
+      parenBalance = countChar(line, '(') - countChar(line, ')');
+      templateBalance = (countChar(line, '`') % 2); // 1 表示未闭合
+      sawAssign = true;
+
+      // 单行安全结束：闭合符或简单字面量，且无分号
+      const canEndHere = (
+        (braceBalance === 0 && endsWithNoComment(line, /\}$/)) ||
+        (bracketBalance === 0 && endsWithNoComment(line, /\]$/)) ||
+        (parenBalance === 0 && endsWithNoComment(line, /\)$/)) ||
+        (templateBalance === 0 && /`[^`]*`\s*$/.test(line)) ||
+        isSimpleLiteralEnd(line)
+      );
+
+      if (canEndHere) {
+        // 直接在当前行末尾补分号
+        return line + ';';
+      }
+
+      // 多行赋值开始，保持状态以在结束行补分号
+      inDecl = true;
+      return line;
+    }
+
+    // 声明内：更新平衡并判断结束位置
+    if (inDecl) {
+      braceBalance += countChar(line, '{') - countChar(line, '}');
+      bracketBalance += countChar(line, '[') - countChar(line, ']');
+      parenBalance += countChar(line, '(') - countChar(line, ')');
+      templateBalance = (templateBalance + countChar(line, '`')) % 2;
+
+      const balancesZero = (braceBalance === 0 && bracketBalance === 0 && parenBalance === 0 && templateBalance === 0);
+      const endsWithCloser = (
+        endsWithNoComment(line, /\}$/) ||
+        endsWithNoComment(line, /\]$/) ||
+        endsWithNoComment(line, /\)$/) ||
+        /`[^`]*`\s*$/.test(line)
+      );
+
+      // 如果已闭合且行尾无分号，但是安全结束，则补分号
+      if (balancesZero && !/;\s*$/.test(line) && (endsWithCloser || isSimpleLiteralEnd(line))) {
+        inDecl = false;
+        sawAssign = false;
+        braceBalance = bracketBalance = parenBalance = templateBalance = 0;
+        return line + ';';
+      }
+
+      // 若遇到分号则退出状态
+      if (/;\s*$/.test(line)) {
+        inDecl = false;
+        sawAssign = false;
+        braceBalance = bracketBalance = parenBalance = templateBalance = 0;
+        return line;
+      }
+
+      // 其它情况保持原样（可能是表达式续行），继续累积到下一行
+      return line;
+    }
+
+    return line;
+  }).join('\n');
+
+  // 写入临时文件
+  const tmpPath = path.join(os.tmpdir(), `arkts_pre_asi_${Date.now()}_${path.basename(filePath)}`);
+  fs.writeFileSync(tmpPath, processed, 'utf-8');
+  return tmpPath;
+}
+
+/**
  * 检查错误是否仅为 MISSING ";" 错误
  * @param {string} output - tree-sitter parse 的输出
  * @returns {boolean} - 如果只有缺失分号的错误返回 true
@@ -122,11 +234,19 @@ function hasOnlyMissingSemicolonErrors(output) {
  * @returns {boolean} - 是否通过验证
  */
 function validateFile(filePath) {
+  let tmpPath = null;
+  const parseTarget = preprocessASI ? (tmpPath = preprocessASIFile(filePath)) : filePath;
+
   try {
-    const output = execSync(`tree-sitter parse "${filePath}"`, {
+    const output = execSync(`tree-sitter parse "${parseTarget}"`, {
       encoding: 'utf-8',
       stdio: 'pipe'
     });
+    
+    // 清理临时文件
+    if (tmpPath && fs.existsSync(tmpPath)) {
+      try { fs.unlinkSync(tmpPath); } catch (_) {}
+    }
     
     // 没有 ERROR 直接通过
     if (!output.includes('ERROR')) {
@@ -142,6 +262,11 @@ function validateFile(filePath) {
     return hasOnlyMissingSemicolonErrors(output);
   } catch (error) {
     const output = error.stdout || '';
+
+    // 清理临时文件
+    if (tmpPath && fs.existsSync(tmpPath)) {
+      try { fs.unlinkSync(tmpPath); } catch (_) {}
+    }
     
     // 没有 ERROR 直接通过
     if (!output.includes('ERROR')) {
@@ -177,7 +302,7 @@ function main() {
 
   if (!jsonOutput) {
     console.log(`正在验证 ${results.total} 个文件...`);
-    console.log(`验证模式: ${strictMode ? '🔒 严格模式（分号必须）' : '🔓 ASI兼容模式（自动分号插入）'}\n`);
+    console.log(`验证模式: ${strictMode ? '🔒 严格模式（分号必须）' : '🔓 ASI兼容模式（自动分号插入）'}${preprocessASI ? ' + 🛠️ 预处理（补常见分号）' : ''}\n`);
   }
 
   // 验证每个文件
