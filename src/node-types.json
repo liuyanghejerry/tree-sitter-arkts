@@ -1227,6 +1227,25 @@
     }
   },
   {
+    "type": "lazy_for_each_statement",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "expression",
+          "named": true
+        },
+        {
+          "type": "ui_builder_arrow_function",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
     "type": "member_expression",
     "named": true,
     "fields": {},
@@ -2073,6 +2092,10 @@
           "named": true
         },
         {
+          "type": "lazy_for_each_statement",
+          "named": true
+        },
+        {
           "type": "ui_if_statement",
           "named": true
         }
@@ -2524,6 +2547,10 @@
   },
   {
     "type": "Image",
+    "named": false
+  },
+  {
+    "type": "LazyForEach",
     "named": false
   },
   {

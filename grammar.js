@@ -379,7 +379,8 @@ module.exports = grammar({
     // UI控制流
     ui_control_flow: $ => choice(
       $.ui_if_statement,
-      $.for_each_statement
+      $.for_each_statement,
+      $.lazy_for_each_statement  // 支持 LazyForEach
     ),
 
     // 组件参数
@@ -404,6 +405,17 @@ module.exports = grammar({
       ',',
       $.ui_builder_arrow_function, // 项构建函数（专用于UI上下文）
       optional(seq(',', $.expression)), // key生成器
+      ')'
+    ),
+
+    // LazyForEach语句 - 懒加载版本，语法与ForEach相同
+    lazy_for_each_statement: $ => seq(
+      'LazyForEach',
+      '(',
+      $.expression, // 数据源
+      ',',
+      $.ui_builder_arrow_function, // 项构建函数
+      optional(seq(',', $.expression)), // key生成器（可以是箭头函数或其他表达式）
       ')'
     ),
 

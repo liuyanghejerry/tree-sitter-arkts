@@ -1916,6 +1916,10 @@
         {
           "type": "SYMBOL",
           "name": "for_each_statement"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "lazy_for_each_statement"
         }
       ]
     },
@@ -2004,6 +2008,56 @@
         {
           "type": "STRING",
           "value": "ForEach"
+        },
+        {
+          "type": "STRING",
+          "value": "("
+        },
+        {
+          "type": "SYMBOL",
+          "name": "expression"
+        },
+        {
+          "type": "STRING",
+          "value": ","
+        },
+        {
+          "type": "SYMBOL",
+          "name": "ui_builder_arrow_function"
+        },
+        {
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "SEQ",
+              "members": [
+                {
+                  "type": "STRING",
+                  "value": ","
+                },
+                {
+                  "type": "SYMBOL",
+                  "name": "expression"
+                }
+              ]
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
+        },
+        {
+          "type": "STRING",
+          "value": ")"
+        }
+      ]
+    },
+    "lazy_for_each_statement": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "STRING",
+          "value": "LazyForEach"
         },
         {
           "type": "STRING",
