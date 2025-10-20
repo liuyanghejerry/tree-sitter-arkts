@@ -58,3 +58,6 @@ reports/*.md
 reports/*.json
 reports/weekly/
 reports/history/
+
+# IDE artifacts
+.qoder/
