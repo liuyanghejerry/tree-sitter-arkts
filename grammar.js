@@ -472,7 +472,12 @@ module.exports = grammar({
       )
     ),
 
-    numeric_literal: $ => /\d+(\.\d+)?([eE][+-]?\d+)?/,
+    numeric_literal: $ => token(choice(
+      /0[xX][0-9a-fA-F]+/,  // 十六进制: 0xFF, 0xABCD
+      /0[oO][0-7]+/,        // 八进制: 0o77
+      /0[bB][01]+/,         // 二进制: 0b1010
+      /\d+(\.\d+)?([eE][+-]?\d+)?/  // 十进制: 123, 1.23, 1.23e10
+    )),
     boolean_literal: $ => choice('true', 'false'),
     null_literal: $ => 'null',
 
@@ -658,7 +663,7 @@ module.exports = grammar({
       optional(seq('else', choice($.if_statement, $.block_statement, $.statement)))
     )),
     
-    // UI中的if语句（不需要大括号）
+    // UI中的if语句（不需要大括号）- 支持 else if 链式调用
     ui_if_statement: $ => seq(
       'if',
       '(',
@@ -671,11 +676,16 @@ module.exports = grammar({
         $.expression_statement
       )),
       '}',
-      optional(seq('else', '{', repeat(choice(
-        $.arkts_ui_element,
-        $.ui_control_flow, 
-        $.expression_statement
-      )), '}'))
+      optional(choice(
+        // else if 分支
+        seq('else', $.ui_if_statement),
+        // else 分支
+        seq('else', '{', repeat(choice(
+          $.arkts_ui_element,
+          $.ui_control_flow, 
+          $.expression_statement
+        )), '}')
+      ))
     ),
 
     // 方法声明 
@@ -1146,11 +1156,11 @@ module.exports = grammar({
       '}'
     ),
 
-    // 资源表达式 $r()
+    // 资源表达式 $r() - 支持多个参数（资源ID + 插值参数）
     resource_expression: $ => seq(
       '$r',
       '(',
-      $.string_literal,
+      commaSep($.expression),  // 支持多个参数
       ')'
     ),
 
