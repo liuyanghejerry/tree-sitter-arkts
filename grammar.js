@@ -318,7 +318,7 @@ module.exports = grammar({
         optional(choice("private", "public", "protected")),
         optional("static"),
         optional("readonly"), // 支持readonly修饰符
-        $.identifier,
+        field("name", $.identifier),
         optional("?"), // 支持可选属性标记
         optional(seq(":", $.type_annotation)),
         optional(seq("=", $.expression)),
@@ -826,7 +826,7 @@ module.exports = grammar({
         optional("static"),
         optional("abstract"), // 支持抽象方法
         optional("async"),
-        $.identifier,
+        field("name", $.identifier),
         optional($.type_parameters),
         $.parameter_list,
         optional(seq(":", $.type_annotation)),
@@ -843,7 +843,7 @@ module.exports = grammar({
     parameter: ($) =>
       seq(
         optional("..."), // 支持剩余参数
-        $.identifier,
+        field("name", $.identifier),
         optional("?"), // 支持可选参数
         optional(seq(":", $.type_annotation)),
         optional(seq("=", $.expression)),
@@ -871,7 +871,7 @@ module.exports = grammar({
 
     variable_declarator: ($) =>
       seq(
-        $.identifier,
+        field("name", $.identifier),
         optional(seq(":", $.type_annotation)),
         optional(prec(10, seq("=", $.expression))), // 提高赋值表达式的优先级
       ),
@@ -1000,7 +1000,7 @@ module.exports = grammar({
       prec.left(
         1,
         seq(
-          $.expression,
+          field("function", $.expression),
           optional($.type_arguments), // 支持泛型参数
           choice(
             seq("?.", $.argument_list), // 支持可选链调用 fn?.(args)
@@ -1032,7 +1032,7 @@ module.exports = grammar({
         // 普通成员访问
         prec.left(1, seq($.expression, ".", $.identifier)),
         // 可选链成员访问 - 使用明确的 '?.' token 避免与条件表达式冲突
-        prec.left(1, seq($.expression, "?.", $.identifier)),
+        prec.left(1, seq($.expression, "?.", field("property", $.identifier))),
       ),
 
     // 索引访问表达式 - arr[index]
@@ -1054,7 +1054,7 @@ module.exports = grammar({
     interface_declaration: ($) =>
       seq(
         "interface",
-        $.identifier,
+        field("name", $.identifier),
         optional($.type_parameters),
         optional($.extends_clause), // 支持接口继承
         $.object_type,
@@ -1075,7 +1075,7 @@ module.exports = grammar({
     type_declaration: ($) =>
       seq(
         "type",
-        $.identifier,
+        field("name", $.identifier),
         optional($.type_parameters),
         "=",
         $.type_annotation,
@@ -1107,7 +1107,7 @@ module.exports = grammar({
         repeat($.decorator),
         optional("abstract"),
         "class",
-        $.identifier,
+        field("name", $.identifier),
         optional($.type_parameters),
         optional(seq("extends", $.type_annotation)),
         optional($.implements_clause),
@@ -1155,7 +1155,7 @@ module.exports = grammar({
           repeat1($.decorator), // 至少一个装饰器
           optional("async"),
           "function",
-          $.identifier,
+          field("name", $.identifier),
           optional($.type_parameters),
           $.parameter_list,
           optional(seq(":", $.type_annotation)),
