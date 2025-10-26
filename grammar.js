@@ -1180,7 +1180,7 @@ module.exports = grammar({
         seq(
           optional("async"),
           "function",
-          $.identifier,
+          field("name", $.identifier),
           optional($.type_parameters),
           $.parameter_list,
           optional(seq(":", $.type_annotation)),
