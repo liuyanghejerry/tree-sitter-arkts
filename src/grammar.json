@@ -1313,11 +1313,11 @@
             "members": [
               {
                 "type": "SYMBOL",
-                "name": "block_statement"
+                "name": "arkts_ui_element"
               },
               {
                 "type": "SYMBOL",
-                "name": "_non_brace_content"
+                "name": "statement"
               }
             ]
           }
@@ -1806,20 +1806,28 @@
           "value": "{"
         },
         {
-          "type": "REPEAT",
-          "content": {
-            "type": "CHOICE",
-            "members": [
-              {
-                "type": "SYMBOL",
-                "name": "block_statement"
-              },
-              {
-                "type": "SYMBOL",
-                "name": "_non_brace_content"
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "REPEAT",
+              "content": {
+                "type": "CHOICE",
+                "members": [
+                  {
+                    "type": "SYMBOL",
+                    "name": "statement"
+                  },
+                  {
+                    "type": "SYMBOL",
+                    "name": "_non_brace_content"
+                  }
+                ]
               }
-            ]
-          }
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
         },
         {
           "type": "STRING",
@@ -2354,6 +2362,14 @@
     "expression": {
       "type": "CHOICE",
       "members": [
+        {
+          "type": "PREC",
+          "value": 100,
+          "content": {
+            "type": "SYMBOL",
+            "name": "arkts_ui_element"
+          }
+        },
         {
           "type": "SYMBOL",
           "name": "identifier"
@@ -4096,8 +4112,12 @@
           "name": "if_statement"
         },
         {
-          "type": "SYMBOL",
-          "name": "expression_statement"
+          "type": "PREC",
+          "value": 50,
+          "content": {
+            "type": "SYMBOL",
+            "name": "expression_statement"
+          }
         },
         {
           "type": "SYMBOL",

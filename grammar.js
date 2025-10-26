@@ -338,7 +338,7 @@ module.exports = grammar({
     // build方法体 - 简化为整体处理
     // 注意：$.comment 不需要显式匹配，因为它已在 extras 中定义（会被自动跳过）
     build_body: ($) =>
-      seq("{", repeat(choice($.block_statement, $._non_brace_content)), "}"),
+      seq("{", repeat(choice($.arkts_ui_element, $.statement)), "}"),
 
     // 修饰符链表达式 - 专门处理以点开头的连续调用
     modifier_chain_expression: ($) =>
@@ -421,7 +421,11 @@ module.exports = grammar({
     // 容器内容体 - 专门用于布局容器的内容，区别于build_body
     // 注意：$.comment 不需要显式匹配，因为它已在 extras 中定义（会被自动跳过）
     container_content_body: ($) =>
-      seq("{", repeat(choice($.block_statement, $._non_brace_content)), "}"),
+      seq(
+        "{",
+        optional(repeat(choice($.statement, $._non_brace_content))),
+        "}",
+      ),
 
     // ArkTS UI元素 - 只使用带修饰符的元素（修饰符链是可选的）
     arkts_ui_element: ($) => $.ui_element_with_modifiers,
@@ -527,6 +531,7 @@ module.exports = grammar({
     // 添加基本表达式支持
     expression: ($) =>
       choice(
+        prec(100, $.arkts_ui_element), // UI组件 - 最高优先级，优先于函数调用
         $.identifier,
         $.string_literal,
         $.numeric_literal,
@@ -855,7 +860,7 @@ module.exports = grammar({
     statement: ($) =>
       choice(
         $.if_statement,
-        $.expression_statement,
+        prec(50, $.expression_statement), // UI elements should be prioritized as statements
         $.variable_declaration,
         $.return_statement,
         $.try_statement, // try/catch/finally 语句
