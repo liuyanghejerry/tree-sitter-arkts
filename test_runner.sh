@@ -11,15 +11,15 @@ successful_files=0
 error_files=0
 
 # 遍历所有.ets测试文件
-for file in test/*.ets; do
+for file in examples/*.ets; do
     if [ -f "$file" ]; then
         total_files=$((total_files + 1))
         echo "测试文件: $file"
-        
+
         # 运行tree-sitter解析并捕获输出
         output=$(tree-sitter parse "$file" 2>&1)
         exit_code=$?
-        
+
         # 检查是否包含ERROR节点
         if echo "$output" | grep -q "ERROR"; then
             echo "  状态: ❌ 解析有错误"
@@ -30,13 +30,13 @@ for file in test/*.ets; do
             echo "  状态: ✅ 解析成功"
             successful_files=$((successful_files + 1))
         fi
-        
+
         # 提取解析统计信息
         if echo "$output" | grep -q "Parse:"; then
             parse_stats=$(echo "$output" | grep "Parse:" | tail -1)
             echo "  统计: $parse_stats"
         fi
-        
+
         echo
     fi
 done
