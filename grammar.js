@@ -80,6 +80,7 @@ module.exports = grammar({
     [$.parenthesized_expression, $.parenthesized_type], // 括号表达式与括号类型的冲突
     [$.conditional_expression, $.conditional_type], // 条件表达式与条件类型的冲突
     [$.block_statement, $.builder_function_body, $.extend_function_body], // 函数体类型冲突
+    [$.arkts_ui_element, $.object_literal], // UI元素与对象字面量的冲突（解决TextInput等问题）
   ],
 
   rules: {
@@ -418,12 +419,21 @@ module.exports = grammar({
         ),
       ),
 
-    // 容器内容体 - 专门用于布局容器的内容，区别于build_body
+    // 容器内容体 - 专门用于布局容器的内容，支持UI组件和语句
+    // 根据 ArkTS 规范，容器内也应该支持UI组件声明
     // 注意：$.comment 不需要显式匹配，因为它已在 extras 中定义（会被自动跳过）
     container_content_body: ($) =>
       seq(
         "{",
-        optional(repeat(choice($.statement, $._non_brace_content))),
+        optional(
+          repeat(
+            choice(
+              prec(100, $.arkts_ui_element),
+              prec(20, $.statement),
+              $._non_brace_content,
+            ),
+          ),
+        ),
         "}",
       ),
 
@@ -531,7 +541,7 @@ module.exports = grammar({
     // 添加基本表达式支持
     expression: ($) =>
       choice(
-        prec(100, $.arkts_ui_element), // UI组件 - 最高优先级，优先于函数调用
+        prec(90, $.arkts_ui_element), // UI组件 - 高优先级，优先于函数调用，但低于容器内容中的优先级
         $.identifier,
         $.string_literal,
         $.numeric_literal,
@@ -984,8 +994,13 @@ module.exports = grammar({
       ),
 
     // UI箭头函数体 - 用于ForEach等UI上下文中的箭头函数，支持直接返回UI元素
+    // 根据 ArkTS 规范，UI上下文中的箭头函数也应该支持UI组件声明
     ui_arrow_function_body: ($) =>
-      seq("{", repeat(choice($.block_statement, $._non_brace_content)), "}"),
+      seq(
+        "{",
+        repeat(choice($.arkts_ui_element, $.statement, $._non_brace_content)),
+        "}",
+      ),
 
     // 函数表达式 - 支持匿名和命名函数表达式
     function_expression: ($) =>

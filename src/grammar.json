@@ -1814,8 +1814,20 @@
                 "type": "CHOICE",
                 "members": [
                   {
-                    "type": "SYMBOL",
-                    "name": "statement"
+                    "type": "PREC",
+                    "value": 100,
+                    "content": {
+                      "type": "SYMBOL",
+                      "name": "arkts_ui_element"
+                    }
+                  },
+                  {
+                    "type": "PREC",
+                    "value": 20,
+                    "content": {
+                      "type": "SYMBOL",
+                      "name": "statement"
+                    }
                   },
                   {
                     "type": "SYMBOL",
@@ -2364,7 +2376,7 @@
       "members": [
         {
           "type": "PREC",
-          "value": 100,
+          "value": 90,
           "content": {
             "type": "SYMBOL",
             "name": "arkts_ui_element"
@@ -4777,7 +4789,11 @@
             "members": [
               {
                 "type": "SYMBOL",
-                "name": "block_statement"
+                "name": "arkts_ui_element"
+              },
+              {
+                "type": "SYMBOL",
+                "name": "statement"
               },
               {
                 "type": "SYMBOL",
@@ -6740,6 +6756,10 @@
       "block_statement",
       "builder_function_body",
       "extend_function_body"
+    ],
+    [
+      "arkts_ui_element",
+      "object_literal"
     ]
   ],
   "precedences": [],
