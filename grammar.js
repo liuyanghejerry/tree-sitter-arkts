@@ -296,9 +296,9 @@ module.exports = grammar({
       seq(
         repeat($.decorator),
         "struct",
-        $.identifier,
+        field("name", $.identifier),
         optional($.type_parameters),
-        $.component_body,
+        field("body", $.component_body),
       ),
 
     // 组件体
