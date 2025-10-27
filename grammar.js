@@ -45,6 +45,17 @@ module.exports = grammar({
     [$.arkts_ui_element, $.expression], // UI元素既可以是arkts_ui_element也可以是expression（用于ForEach箭头函数返回值）
     [$.component_declaration], // 支持 @Component export struct 语法的冲突
     [$.decorated_export_declaration, $.component_declaration], // @Component export struct 既可以匹配 component_declaration 也可以匹配 decorated_export_declaration
+    [
+      $.decorated_export_declaration,
+      $.component_declaration,
+      $.class_declaration,
+      $.decorated_function_declaration,
+    ], // 装饰器在不同声明中的冲突
+    [
+      $.decorated_export_declaration,
+      $.class_declaration,
+      $.decorated_function_declaration,
+    ], // 装饰器在函数和类声明中的冲突
     [$.primary_type, $.qualified_type], // as 表达式中的类型注解冲突
     [$.primary_type, $.generic_type], // as 表达式中的泛型类型冲突
     [$.primary_type, $.array_type], // as 表达式中的数组类型冲突
@@ -114,27 +125,46 @@ module.exports = grammar({
         choice(
           // 混合导入：import defaultExport, { namedExport } from '...'
           seq(
-            $.identifier,
+            field("default_import", $.identifier),
             ",",
             "{",
-            commaSep($.import_specifier),
+            commaSep(field("named_imports", $.import_specifier)),
             "}",
             "from",
-            $.string_literal,
+            field("source", $.string_literal),
           ),
           // 默认导入：import identifier from '...'
-          seq($.identifier, "from", $.string_literal),
+          seq(
+            field("default_import", $.identifier),
+            "from",
+            field("source", $.string_literal),
+          ),
           // 命名导入：import { ... } from '...'
-          seq("{", commaSep($.import_specifier), "}", "from", $.string_literal),
+          seq(
+            "{",
+            commaSep(field("named_imports", $.import_specifier)),
+            "}",
+            "from",
+            field("source", $.string_literal),
+          ),
           // 全部导入：import * as identifier from '...'
-          seq("*", "as", $.identifier, "from", $.string_literal),
+          seq(
+            "*",
+            "as",
+            field("namespace", $.identifier),
+            "from",
+            field("source", $.string_literal),
+          ),
         ),
         optional(";"),
       ),
 
     // 导入说明符 - 支持 as 别名
     import_specifier: ($) =>
-      choice($.identifier, seq($.identifier, "as", $.identifier)),
+      choice(
+        field("name", $.identifier),
+        seq(field("name", $.identifier), "as", field("alias", $.identifier)),
+      ),
 
     // 带装饰器的导出声明（用于 @Builder export function、@Observed export class、@Component export struct 等）
     decorated_export_declaration: ($) =>
@@ -146,32 +176,32 @@ module.exports = grammar({
           seq(
             optional("async"),
             "function",
-            $.identifier,
-            optional($.type_parameters),
-            $.parameter_list,
-            optional(seq(":", $.type_annotation)),
+            field("name", $.identifier),
+            optional(field("type_parameters", $.type_parameters)),
+            field("parameters", $.parameter_list),
+            optional(seq(":", field("return_type", $.type_annotation))),
             choice(
-              prec(2, $.builder_function_body), // @Builder 函数体
-              prec(1, $.extend_function_body), // @Extend 函数体
-              $.block_statement, // 普通函数体
+              field("body", prec(2, $.builder_function_body)), // @Builder 函数体
+              field("body", prec(1, $.extend_function_body)), // @Extend 函数体
+              field("body", $.block_statement), // 普通函数体
             ),
           ),
           // export class
           seq(
             optional("abstract"),
             "class",
-            $.identifier,
-            optional($.type_parameters),
-            optional(seq("extends", $.type_annotation)),
-            optional($.implements_clause),
-            $.class_body,
+            field("name", $.identifier),
+            optional(field("type_parameters", $.type_parameters)),
+            optional(seq("extends", field("superclass", $.type_annotation))),
+            optional(field("implements", $.implements_clause)),
+            field("body", $.class_body),
           ),
           // export struct (component)
           seq(
             "struct",
-            $.identifier,
-            optional($.type_parameters),
-            $.component_body,
+            field("name", $.identifier),
+            optional(field("type_parameters", $.type_parameters)),
+            field("body", $.component_body),
           ),
           // export default
           seq(
@@ -236,57 +266,60 @@ module.exports = grammar({
     decorator: ($) =>
       seq(
         "@",
-        choice(
-          // 基础装饰器
-          "Entry", // 入口装饰器
-          "Component", // 组件装饰器（V1）
-          "ComponentV2", // 组件装饰器（V2）
+        field(
+          "name",
+          choice(
+            // 基础装饰器
+            "Entry", // 入口装饰器
+            "Component", // 组件装饰器（V1）
+            "ComponentV2", // 组件装饰器（V2）
 
-          // 状态管理 V1 装饰器
-          "State", // 组件内部状态
-          "Prop", // 父子单向同步
-          "Link", // 父子双向同步
-          "Provide", // 与后代组件双向同步（提供方）
-          "Consume", // 与后代组件双向同步（消费方）
-          "ObjectLink", // 嵌套对象双向同步
-          "Observed", // 类对象观测（V1）
-          "Watch", // 状态变化监听
-          "StorageLink", // AppStorage双向同步
-          "StorageProp", // AppStorage单向同步
-          "LocalStorageLink", // LocalStorage双向同步
-          "LocalStorageProp", // LocalStorage单向同步
+            // 状态管理 V1 装饰器
+            "State", // 组件内部状态
+            "Prop", // 父子单向同步
+            "Link", // 父子双向同步
+            "Provide", // 与后代组件双向同步（提供方）
+            "Consume", // 与后代组件双向同步（消费方）
+            "ObjectLink", // 嵌套对象双向同步
+            "Observed", // 类对象观测（V1）
+            "Watch", // 状态变化监听
+            "StorageLink", // AppStorage双向同步
+            "StorageProp", // AppStorage单向同步
+            "LocalStorageLink", // LocalStorage双向同步
+            "LocalStorageProp", // LocalStorage单向同步
 
-          // 状态管理 V2 装饰器
-          "Local", // 组件内部状态（V2）
-          "Param", // 组件外部输入（V2）
-          "Once", // 初始化同步一次
-          "Event", // 规范组件输出
-          "Provider", // 跨组件层级提供（V2）
-          "Consumer", // 跨组件层级消费（V2）
-          "Monitor", // 状态变量修改监听
-          "Computed", // 计算属性
-          "Type", // 标记类型
-          "ObservedV2", // 类对象观测（V2）
-          "Trace", // 属性追踪（V2）
+            // 状态管理 V2 装饰器
+            "Local", // 组件内部状态（V2）
+            "Param", // 组件外部输入（V2）
+            "Once", // 初始化同步一次
+            "Event", // 规范组件输出
+            "Provider", // 跨组件层级提供（V2）
+            "Consumer", // 跨组件层级消费（V2）
+            "Monitor", // 状态变量修改监听
+            "Computed", // 计算属性
+            "Type", // 标记类型
+            "ObservedV2", // 类对象观测（V2）
+            "Trace", // 属性追踪（V2）
 
-          // UI构建装饰器
-          "Builder", // 自定义构建函数
-          "BuilderParam", // 引用@Builder函数
-          "LocalBuilder", // 维持组件关系
-          "Styles", // 定义组件重用样式
-          "Extend", // 扩展原生组件样式
-          "AnimatableExtend", // 可动画扩展
+            // UI构建装饰器
+            "Builder", // 自定义构建函数
+            "BuilderParam", // 引用@Builder函数
+            "LocalBuilder", // 维持组件关系
+            "Styles", // 定义组件重用样式
+            "Extend", // 扩展原生组件样式
+            "AnimatableExtend", // 可动画扩展
 
-          // 其他装饰器
-          "Require", // 校验构造传参
-          "Reusable", // 组件复用
-          "Concurrent", // 并发函数标记
-          "Track", // 精细化属性观测
+            // 其他装饰器
+            "Require", // 校验构造传参
+            "Reusable", // 组件复用
+            "Concurrent", // 并发函数标记
+            "Track", // 精细化属性观测
 
-          // 或者其他自定义装饰器
-          $.identifier,
+            // 或者其他自定义装饰器
+            $.identifier,
+          ),
         ),
-        optional(seq("(", commaSep($.expression), ")")),
+        optional(field("arguments", seq("(", commaSep($.expression), ")"))),
       ),
 
     // 组件声明 - ArkTS核心特性
@@ -294,11 +327,11 @@ module.exports = grammar({
     // 导出的组件声明使用 decorated_export_declaration：@Component export struct ...
     component_declaration: ($) =>
       seq(
-        repeat($.decorator),
+        repeat(field("decorator", $.decorator)),
         "struct",
-        $.identifier,
-        optional($.type_parameters),
-        $.component_body,
+        field("name", $.identifier),
+        optional(field("type_parameters", $.type_parameters)),
+        field("body", $.component_body),
       ),
 
     // 组件体
@@ -314,14 +347,14 @@ module.exports = grammar({
     // 属性声明 - 支持状态管理装饰器
     property_declaration: ($) =>
       seq(
-        repeat($.decorator),
-        optional(choice("private", "public", "protected")),
+        repeat(field("decorator", $.decorator)),
+        optional(field("visibility", choice("private", "public", "protected"))),
         optional("static"),
         optional("readonly"), // 支持readonly修饰符
-        $.identifier,
+        field("name", $.identifier),
         optional("?"), // 支持可选属性标记
-        optional(seq(":", $.type_annotation)),
-        optional(seq("=", $.expression)),
+        optional(seq(":", field("type", $.type_annotation))),
+        optional(seq("=", field("value", $.expression))),
         optional(";"), // 分号可选
       ),
 
@@ -331,8 +364,8 @@ module.exports = grammar({
         "build",
         "(",
         ")",
-        optional(seq(":", $.type_annotation)),
-        $.build_body,
+        optional(seq(":", field("return_type", $.type_annotation))),
+        field("body", $.build_body),
       ),
 
     // build方法体 - 简化为整体处理
@@ -357,8 +390,10 @@ module.exports = grammar({
         20,
         seq(
           ".",
-          $.identifier,
-          optional(seq("(", optional(commaSep($.expression)), ")")),
+          field("name", $.identifier),
+          optional(
+            field("arguments", seq("(", optional(commaSep($.expression)), ")")),
+          ),
           optional($.modifier_chain_expression), // 递归匹配后续修饰符
         ),
       ),
@@ -376,15 +411,17 @@ module.exports = grammar({
         3,
         choice(
           // 基础组件
-          seq("Text", "(", $.expression, ")"),
+          seq("Text", "(", field("content", $.expression), ")"),
           seq(
             "Button",
             "(",
-            optional(choice($.expression, $.component_parameters)),
+            optional(
+              choice(field("content", $.expression), $.component_parameters),
+            ),
             ")",
-            optional($.container_content_body),
+            optional(field("body", $.container_content_body)),
           ), // Button 也可以有子组件
-          seq("Image", "(", $.expression, ")"),
+          seq("Image", "(", field("src", $.expression), ")"),
           seq(
             choice("TextInput", "TextArea"),
             "(",
@@ -420,11 +457,11 @@ module.exports = grammar({
           ),
           // 自定义组件 - 支持容器内容体
           seq(
-            $.identifier,
+            field("name", $.identifier),
             "(",
             optional(choice($.component_parameters, commaSep($.expression))),
             ")",
-            optional($.container_content_body),
+            optional(field("body", $.container_content_body)),
           ),
         ),
       ),
@@ -454,9 +491,14 @@ module.exports = grammar({
       prec(
         10,
         seq(
-          $.identifier, // 自定义组件名
+          field("component", $.identifier), // 自定义组件名
           "(",
-          optional(choice($.component_parameters, commaSep($.expression))),
+          optional(
+            field(
+              "arguments",
+              choice($.component_parameters, commaSep($.expression)),
+            ),
+          ),
           ")",
           ";", // 必需的分号
         ),
@@ -475,17 +517,21 @@ module.exports = grammar({
       seq("{", commaSepTrailing($.component_parameter), "}"),
 
     // 单个组件参数
-    component_parameter: ($) => prec(2, seq($.identifier, ":", $.expression)),
+    component_parameter: ($) =>
+      prec(
+        2,
+        seq(field("name", $.identifier), ":", field("value", $.expression)),
+      ),
 
     // ForEach语句
     for_each_statement: ($) =>
       seq(
         "ForEach",
         "(",
-        $.expression, // 数据源
+        field("data", $.expression), // 数据源
         ",",
-        $.ui_builder_arrow_function, // 项构建函数（专用于UI上下文）
-        optional(seq(",", $.expression)), // key生成器
+        field("builder", $.ui_builder_arrow_function), // 项构建函数（专用于UI上下文）
+        optional(seq(",", field("key_generator", $.expression))), // key生成器
         ")",
       ),
 
@@ -494,10 +540,10 @@ module.exports = grammar({
       seq(
         "LazyForEach",
         "(",
-        $.expression, // 数据源
+        field("data", $.expression), // 数据源
         ",",
-        $.ui_builder_arrow_function, // 项构建函数
-        optional(seq(",", $.expression)), // key生成器（可以是箭头函数或其他表达式）
+        field("builder", $.ui_builder_arrow_function), // 项构建函数
+        optional(seq(",", field("key_generator", $.expression))), // key生成器（可以是箭头函数或其他表达式）
         ")",
       ),
 
@@ -507,12 +553,15 @@ module.exports = grammar({
         1,
         seq(
           optional("async"),
-          choice($.identifier, $.parameter_list),
-          optional(seq(":", $.type_annotation)),
+          field("parameters", choice($.identifier, $.parameter_list)),
+          optional(seq(":", field("return_type", $.type_annotation))),
           "=>",
-          choice(
-            prec(2, $.ui_arrow_function_body), // UI箭头函数体（优先）
-            $.expression, // 单个UI元素表达式
+          field(
+            "body",
+            choice(
+              prec(2, $.ui_arrow_function_body), // UI箭头函数体（优先）
+              $.expression, // 单个UI元素表达式
+            ),
           ),
         ),
       ),
@@ -577,7 +626,7 @@ module.exports = grammar({
 
     // 状态绑定表达式（$语法）
     state_binding_expression: ($) =>
-      seq("$", choice($.identifier, $.member_expression)),
+      seq("$", field("argument", choice($.identifier, $.member_expression))),
 
     numeric_literal: ($) =>
       token(
@@ -594,31 +643,102 @@ module.exports = grammar({
     // 二元表达式
     binary_expression: ($) =>
       choice(
-        prec.left(10, seq($.expression, "||", $.expression)),
-        prec.left(10, seq($.expression, "??", $.expression)), // 支持空值合并运算符
-        prec.left(11, seq($.expression, "&&", $.expression)),
-        prec.left(12, seq($.expression, "|", $.expression)),
-        prec.left(13, seq($.expression, "^", $.expression)),
-        prec.left(14, seq($.expression, "&", $.expression)),
+        prec.left(
+          10,
+          seq(
+            field("left", $.expression),
+            field("operator", "||"),
+            field("right", $.expression),
+          ),
+        ),
+        prec.left(
+          10,
+          seq(
+            field("left", $.expression),
+            field("operator", "??"),
+            field("right", $.expression),
+          ),
+        ), // 支持空值合并运算符
+        prec.left(
+          11,
+          seq(
+            field("left", $.expression),
+            field("operator", "&&"),
+            field("right", $.expression),
+          ),
+        ),
+        prec.left(
+          12,
+          seq(
+            field("left", $.expression),
+            field("operator", "|"),
+            field("right", $.expression),
+          ),
+        ),
+        prec.left(
+          13,
+          seq(
+            field("left", $.expression),
+            field("operator", "^"),
+            field("right", $.expression),
+          ),
+        ),
+        prec.left(
+          14,
+          seq(
+            field("left", $.expression),
+            field("operator", "&"),
+            field("right", $.expression),
+          ),
+        ),
         prec.left(
           15,
-          seq($.expression, choice("==", "!=", "===", "!=="), $.expression),
+          seq(
+            field("left", $.expression),
+            field("operator", choice("==", "!=", "===", "!==")),
+            field("right", $.expression),
+          ),
         ),
         prec.left(
           16,
           seq(
-            $.expression,
-            choice("<", ">", "<=", ">=", "instanceof", "in"),
-            $.expression,
+            field("left", $.expression),
+            field("operator", choice("<", ">", "<=", ">=", "instanceof", "in")),
+            field("right", $.expression),
           ),
         ),
         prec.left(
           17,
-          seq($.expression, choice("<<", ">>", ">>>"), $.expression),
+          seq(
+            field("left", $.expression),
+            field("operator", choice("<<", ">>", ">>>")),
+            field("right", $.expression),
+          ),
         ),
-        prec.left(18, seq($.expression, choice("+", "-"), $.expression)),
-        prec.left(19, seq($.expression, choice("*", "/", "%"), $.expression)),
-        prec.left(20, seq($.expression, "**", $.expression)),
+        prec.left(
+          18,
+          seq(
+            field("left", $.expression),
+            field("operator", choice("+", "-")),
+            field("right", $.expression),
+          ),
+        ),
+        prec.left(
+          19,
+          seq(
+            field("left", $.expression),
+            field("operator", choice("*", "/", "%")),
+            field("right", $.expression),
+          ),
+        ),
+        prec.left(
+          20,
+          seq(
+            field("left", $.expression),
+            field("operator", "**"),
+            field("right", $.expression),
+          ),
+        ),
       ),
 
     // 一元表达式
@@ -626,8 +746,11 @@ module.exports = grammar({
       prec.right(
         21,
         seq(
-          choice("!", "~", "-", "+", "typeof", "void", "delete"),
-          $.expression,
+          field(
+            "operator",
+            choice("!", "~", "-", "+", "typeof", "void", "delete"),
+          ),
+          field("argument", $.expression),
         ),
       ),
 
@@ -636,22 +759,25 @@ module.exports = grammar({
       prec.right(
         1,
         seq(
-          choice($.identifier, $.member_expression),
-          choice(
-            "=",
-            "+=",
-            "-=",
-            "*=",
-            "/=",
-            "%=",
-            "&=",
-            "|=",
-            "^=",
-            "<<=",
-            ">>=",
-            ">>>=",
+          field("left", choice($.identifier, $.member_expression)),
+          field(
+            "operator",
+            choice(
+              "=",
+              "+=",
+              "-=",
+              "*=",
+              "/=",
+              "%=",
+              "&=",
+              "|=",
+              "^=",
+              "<<=",
+              ">>=",
+              ">>>=",
+            ),
           ),
-          $.expression,
+          field("right", $.expression),
         ),
       ),
 
@@ -660,18 +786,35 @@ module.exports = grammar({
     conditional_expression: ($) =>
       prec.dynamic(
         10,
-        prec.right(4, seq($.expression, "?", $.expression, ":", $.expression)),
+        prec.right(
+          4,
+          seq(
+            field("condition", $.expression),
+            "?",
+            field("consequence", $.expression),
+            ":",
+            field("alternative", $.expression),
+          ),
+        ),
       ),
 
     // @ 表达式（用于装饰器冲突解决）
     at_expression: ($) => seq("@", $.expression),
 
     // await 表达式
-    await_expression: ($) => prec.right(21, seq("await", $.expression)),
+    await_expression: ($) =>
+      prec.right(21, seq("await", field("argument", $.expression))),
 
     // 类型断言表达式 - value as Type
     as_expression: ($) =>
-      prec.left(3, seq($.expression, "as", $.type_annotation)),
+      prec.left(
+        3,
+        seq(
+          field("expression", $.expression),
+          "as",
+          field("type", $.type_annotation),
+        ),
+      ),
 
     // 动态 import() 表达式
     import_expression: ($) =>
@@ -680,7 +823,7 @@ module.exports = grammar({
         seq(
           "import",
           "(",
-          $.expression, // 支持字符串字面量或变量
+          field("source", $.expression), // 支持字符串字面量或变量
           ")",
         ),
       ),
@@ -719,11 +862,14 @@ module.exports = grammar({
     generic_type: ($) =>
       prec.left(
         seq(
-          choice(
-            $.identifier,
-            $.qualified_type, // 支持 namespace.Type<T>
+          field(
+            "name",
+            choice(
+              $.identifier,
+              $.qualified_type, // 支持 namespace.Type<T>
+            ),
           ),
-          $.type_arguments,
+          field("type_arguments", $.type_arguments),
         ),
       ),
 
@@ -737,25 +883,47 @@ module.exports = grammar({
 
     // 限定类型名 - 支持 namespace.Type 形式
     qualified_type: ($) =>
-      prec.left(seq($.identifier, repeat1(seq(".", $.identifier)))),
+      prec.left(
+        seq(
+          field("namespace", $.identifier),
+          repeat1(seq(".", field("name", $.identifier))),
+        ),
+      ),
 
     // 联合类型 - A | B | C
     union_type: ($) =>
-      prec.left(2, seq($.primary_type, repeat1(seq("|", $.primary_type)))),
+      prec.left(
+        2,
+        seq(
+          field("type", $.primary_type),
+          repeat1(seq("|", field("type", $.primary_type))),
+        ),
+      ),
 
     // 函数类型 - (param: Type) => ReturnType
     function_type: ($) =>
-      prec.right(3, seq($.parameter_list, "=>", $.type_annotation)),
+      prec.right(
+        3,
+        seq(
+          field("parameters", $.parameter_list),
+          "=>",
+          field("return_type", $.type_annotation),
+        ),
+      ),
 
     // 数组类型
     array_type: ($) =>
       seq(
-        choice("number", "string", "boolean", "any", $.identifier),
+        field(
+          "element",
+          choice("number", "string", "boolean", "any", $.identifier),
+        ),
         repeat1(seq("[", "]")),
       ),
 
     // 元组类型 - [A, B, C]
-    tuple_type: ($) => seq("[", commaSep($.type_annotation), "]"),
+    tuple_type: ($) =>
+      seq("[", commaSep(field("element", $.type_annotation)), "]"),
 
     // 括号类型 - 用于包裹任何类型，如 ((param: string) => void)
     parenthesized_type: ($) =>
@@ -766,13 +934,13 @@ module.exports = grammar({
       prec.right(
         1,
         seq(
-          $.primary_type,
+          field("check_type", $.primary_type),
           "extends",
-          $.type_annotation,
+          field("extends_type", $.type_annotation),
           "?",
-          $.type_annotation,
+          field("true_type", $.type_annotation),
           ":",
-          $.type_annotation,
+          field("false_type", $.type_annotation),
         ),
       ),
 
@@ -782,9 +950,9 @@ module.exports = grammar({
     // 单个类型参数 - 支持约束和默认值
     type_parameter: ($) =>
       seq(
-        $.identifier,
-        optional(seq("extends", $.type_annotation)), // 泛型约束
-        optional(seq("=", $.type_annotation)), // 泛型默认值
+        field("name", $.identifier),
+        optional(seq("extends", field("constraint", $.type_annotation))), // 泛型约束
+        optional(seq("=", field("default", $.type_annotation))), // 泛型默认值
       ),
 
     // 基本语句类型
@@ -794,11 +962,17 @@ module.exports = grammar({
         seq(
           "if",
           "(",
-          $.expression,
+          field("condition", $.expression),
           ")",
-          choice($.block_statement, $.statement),
+          field("consequence", choice($.block_statement, $.statement)),
           optional(
-            seq("else", choice($.if_statement, $.block_statement, $.statement)),
+            seq(
+              "else",
+              field(
+                "alternative",
+                choice($.if_statement, $.block_statement, $.statement),
+              ),
+            ),
           ),
         ),
       ),
@@ -808,7 +982,7 @@ module.exports = grammar({
       seq(
         "if",
         "(",
-        $.expression,
+        field("condition", $.expression),
         ")",
         "{",
         repeat(
@@ -818,19 +992,24 @@ module.exports = grammar({
         optional(
           choice(
             // else if 分支
-            seq("else", $.ui_if_statement),
+            seq("else", field("alternative", $.ui_if_statement)),
             // else 分支
             seq(
               "else",
-              "{",
-              repeat(
-                choice(
-                  $.arkts_ui_element,
-                  $.ui_control_flow,
-                  $.expression_statement,
+              field(
+                "alternative",
+                seq(
+                  "{",
+                  repeat(
+                    choice(
+                      $.arkts_ui_element,
+                      $.ui_control_flow,
+                      $.expression_statement,
+                    ),
+                  ),
+                  "}",
                 ),
               ),
-              "}",
             ),
           ),
         ),
@@ -839,19 +1018,19 @@ module.exports = grammar({
     // 方法声明
     method_declaration: ($) =>
       seq(
-        repeat($.decorator),
-        optional(choice("private", "public", "protected")),
+        repeat(field("decorator", $.decorator)),
+        optional(field("visibility", choice("private", "public", "protected"))),
         optional("static"),
         optional("abstract"), // 支持抽象方法
         optional("async"),
-        $.identifier,
-        optional($.type_parameters),
-        $.parameter_list,
-        optional(seq(":", $.type_annotation)),
+        field("name", $.identifier),
+        optional(field("type_parameters", $.type_parameters)),
+        field("parameters", $.parameter_list),
+        optional(seq(":", field("return_type", $.type_annotation))),
         choice(
-          prec(3, $.builder_function_body), // @Builder 函数体（最高优先级）
-          prec(2, $.extend_function_body), // @Extend 函数体
-          prec(1, $.block_statement), // 普通函数体
+          field("body", prec(3, $.builder_function_body)), // @Builder 函数体（最高优先级）
+          field("body", prec(2, $.extend_function_body)), // @Extend 函数体
+          field("body", prec(1, $.block_statement)), // 普通函数体
           ";", // 抽象方法
         ),
       ),
@@ -861,10 +1040,10 @@ module.exports = grammar({
     parameter: ($) =>
       seq(
         optional("..."), // 支持剩余参数
-        $.identifier,
+        field("name", $.identifier),
         optional("?"), // 支持可选参数
-        optional(seq(":", $.type_annotation)),
-        optional(seq("=", $.expression)),
+        optional(seq(":", field("type", $.type_annotation))),
+        optional(seq("=", field("default_value", $.expression))),
       ),
 
     block_statement: ($) => seq("{", repeat($._statement), "}"),
@@ -921,24 +1100,29 @@ module.exports = grammar({
       ),
 
     variable_declaration: ($) =>
-      seq(choice("var", "let", "const"), commaSep($.variable_declarator), ";"),
+      seq(
+        field("kind", choice("var", "let", "const")),
+        commaSep($.variable_declarator),
+        ";",
+      ),
 
     variable_declarator: ($) =>
       seq(
-        $.identifier,
-        optional(seq(":", $.type_annotation)),
-        optional(prec(10, seq("=", $.expression))), // 提高赋值表达式的优先级
+        field("name", $.identifier),
+        optional(seq(":", field("type", $.type_annotation))),
+        optional(prec(10, seq("=", field("value", $.expression)))), // 提高赋值表达式的优先级
       ),
 
-    return_statement: ($) => seq("return", optional($.expression), ";"),
+    return_statement: ($) =>
+      seq("return", optional(field("argument", $.expression)), ";"),
 
     // try/catch/finally 语句
     try_statement: ($) =>
       seq(
         "try",
-        $.block_statement,
-        optional($.catch_clause),
-        optional($.finally_clause),
+        field("body", $.block_statement),
+        optional(field("handler", $.catch_clause)),
+        optional(field("finalizer", $.finally_clause)),
       ),
 
     catch_clause: ($) =>
@@ -947,18 +1131,18 @@ module.exports = grammar({
         optional(
           seq(
             "(",
-            $.identifier, // 异常变量名
-            optional(seq(":", $.type_annotation)), // 可选类型注释
+            field("parameter", $.identifier), // 异常变量名
+            optional(seq(":", field("type", $.type_annotation))), // 可选类型注释
             ")",
           ),
         ),
-        $.block_statement,
+        field("body", $.block_statement),
       ),
 
-    finally_clause: ($) => seq("finally", $.block_statement),
+    finally_clause: ($) => seq("finally", field("body", $.block_statement)),
 
     // throw 语句
-    throw_statement: ($) => seq("throw", $.expression, ";"),
+    throw_statement: ($) => seq("throw", field("argument", $.expression), ";"),
 
     // for 循环 - 支持传统for循环、for...in 和 for...of
     for_statement: ($) =>
@@ -967,27 +1151,37 @@ module.exports = grammar({
         "(",
         choice(
           // for...of 循环: for (let x of array)
-          seq(choice("const", "let", "var"), $.identifier, "of", $.expression),
+          seq(
+            choice("const", "let", "var"),
+            field("left", $.identifier),
+            "of",
+            field("right", $.expression),
+          ),
           // for...in 循环: for (let key in object)
-          seq(choice("const", "let", "var"), $.identifier, "in", $.expression),
+          seq(
+            choice("const", "let", "var"),
+            field("left", $.identifier),
+            "in",
+            field("right", $.expression),
+          ),
           // 传统 for 循环: for (let i = 0; i < 10; i++)
           seq(
-            $.variable_declaration,
-            $.expression,
+            field("init", $.variable_declaration),
+            field("condition", $.expression),
             ";",
-            optional($.expression),
+            optional(field("update", $.expression)),
           ),
           // for 循环简化形式: for (; i < 10; i++)
           seq(
-            optional($.expression),
+            optional(field("init", $.expression)),
             ";",
-            optional($.expression),
+            optional(field("condition", $.expression)),
             ";",
-            optional($.expression),
+            optional(field("update", $.expression)),
           ),
         ),
         ")",
-        choice($.block_statement, $.statement),
+        field("body", choice($.block_statement, $.statement)),
       ),
 
     // while 循环
@@ -995,16 +1189,16 @@ module.exports = grammar({
       seq(
         "while",
         "(",
-        $.expression,
+        field("condition", $.expression),
         ")",
-        choice($.block_statement, $.statement),
+        field("body", choice($.block_statement, $.statement)),
       ),
 
     // break 语句
     break_statement: ($) =>
       seq(
         "break",
-        optional($.identifier), // 可选标签
+        optional(field("label", $.identifier)), // 可选标签
         ";",
       ),
 
@@ -1012,7 +1206,7 @@ module.exports = grammar({
     continue_statement: ($) =>
       seq(
         "continue",
-        optional($.identifier), // 可选标签
+        optional(field("label", $.identifier)), // 可选标签
         ";",
       ),
 
@@ -1022,12 +1216,15 @@ module.exports = grammar({
         1,
         seq(
           optional("async"), // 支持异步箭头函数
-          choice($.identifier, $.parameter_list),
-          optional(seq(":", $.type_annotation)), // 支持返回类型注解
+          field("parameters", choice($.identifier, $.parameter_list)),
+          optional(seq(":", field("return_type", $.type_annotation))), // 支持返回类型注解
           "=>",
-          choice(
-            prec(2, $.block_statement), // 普通块语句
-            $.expression, // 表达式
+          field(
+            "body",
+            choice(
+              prec(2, $.block_statement), // 普通块语句
+              $.expression, // 表达式
+            ),
           ),
         ),
       ),
@@ -1040,11 +1237,11 @@ module.exports = grammar({
       seq(
         optional("async"), // 支持异步函数表达式
         "function",
-        optional($.identifier), // 可选的函数名
-        optional($.type_parameters),
-        $.parameter_list,
-        optional(seq(":", $.type_annotation)),
-        $.block_statement,
+        optional(field("name", $.identifier)), // 可选的函数名
+        optional(field("type_parameters", $.type_parameters)),
+        field("parameters", $.parameter_list),
+        optional(seq(":", field("return_type", $.type_annotation))),
+        field("body", $.block_statement),
       ),
 
     // 调用表达式 - 降低优先级，避免与修饰筦链冲突
@@ -1053,11 +1250,11 @@ module.exports = grammar({
       prec.left(
         1,
         seq(
-          $.expression,
-          optional($.type_arguments), // 支持泛型参数
+          field("function", $.expression),
+          optional(field("type_arguments", $.type_arguments)), // 支持泛型参数
           choice(
-            seq("?.", $.argument_list), // 支持可选链调用 fn?.(args)
-            $.argument_list,
+            field("arguments", seq("?.", $.argument_list)), // 支持可选链调用 fn?.(args)
+            field("arguments", $.argument_list),
           ),
         ),
       ),
@@ -1076,16 +1273,30 @@ module.exports = grammar({
       ),
 
     // 展开元素
-    spread_element: ($) => seq("...", $.expression),
+    spread_element: ($) => seq("...", field("argument", $.expression)),
 
     // 成员表达式 - 降低优先级，避免与修饰符链冲突
     // 支持可选链 ?.
     member_expression: ($) =>
       choice(
         // 普通成员访问
-        prec.left(1, seq($.expression, ".", $.identifier)),
+        prec.left(
+          1,
+          seq(
+            field("object", $.expression),
+            ".",
+            field("property", $.identifier),
+          ),
+        ),
         // 可选链成员访问 - 使用明确的 '?.' token 避免与条件表达式冲突
-        prec.left(1, seq($.expression, "?.", $.identifier)),
+        prec.left(
+          1,
+          seq(
+            field("object", $.expression),
+            "?.",
+            field("property", $.identifier),
+          ),
+        ),
       ),
 
     // 索引访问表达式 - arr[index]
@@ -1093,24 +1304,25 @@ module.exports = grammar({
       prec.left(
         19,
         seq(
-          $.expression,
+          field("object", $.expression),
           optional("?."), // 支持可选链索引访问 obj?.[expr]
           "[",
-          $.expression,
+          field("index", $.expression),
           "]",
         ),
       ),
 
-    parenthesized_expression: ($) => seq("(", $.expression, ")"),
+    parenthesized_expression: ($) =>
+      seq("(", field("expression", $.expression), ")"),
 
     // 接口和类型声明基础支持
     interface_declaration: ($) =>
       seq(
         "interface",
-        $.identifier,
-        optional($.type_parameters),
-        optional($.extends_clause), // 支持接口继承
-        $.object_type,
+        field("name", $.identifier),
+        optional(field("type_parameters", $.type_parameters)),
+        optional(field("extends", $.extends_clause)), // 支持接口继承
+        field("body", $.object_type),
       ),
 
     // extends 子句 - 接口可以继承多个接口
@@ -1128,16 +1340,21 @@ module.exports = grammar({
     type_declaration: ($) =>
       seq(
         "type",
-        $.identifier,
-        optional($.type_parameters),
+        field("name", $.identifier),
+        optional(field("type_parameters", $.type_parameters)),
         "=",
-        $.type_annotation,
+        field("definition", $.type_annotation),
         ";",
       ),
 
     // enum 声明 - 支持 const enum 和普通 enum
     enum_declaration: ($) =>
-      seq(optional("const"), "enum", $.identifier, $.enum_body),
+      seq(
+        optional("const"),
+        "enum",
+        field("name", $.identifier),
+        field("body", $.enum_body),
+      ),
 
     // enum 体
     enum_body: ($) =>
@@ -1151,20 +1368,20 @@ module.exports = grammar({
     // enum 成员
     enum_member: ($) =>
       seq(
-        $.identifier,
-        optional(seq("=", $.expression)), // 支持数字和字符串值
+        field("name", $.identifier),
+        optional(seq("=", field("value", $.expression))), // 支持数字和字符串值
       ),
 
     class_declaration: ($) =>
       seq(
-        repeat($.decorator),
+        repeat(field("decorator", $.decorator)),
         optional("abstract"),
         "class",
-        $.identifier,
-        optional($.type_parameters),
-        optional(seq("extends", $.type_annotation)),
-        optional($.implements_clause),
-        $.class_body,
+        field("name", $.identifier),
+        optional(field("type_parameters", $.type_parameters)),
+        optional(seq("extends", field("superclass", $.type_annotation))),
+        optional(field("implements", $.implements_clause)),
+        field("body", $.class_body),
       ),
 
     class_body: ($) =>
@@ -1194,26 +1411,26 @@ module.exports = grammar({
 
     constructor_declaration: ($) =>
       seq(
-        optional(choice("private", "public", "protected")),
+        optional(field("visibility", choice("private", "public", "protected"))),
         "constructor",
-        $.parameter_list,
-        $.block_statement,
+        field("parameters", $.parameter_list),
+        field("body", $.block_statement),
       ),
 
     // 带装饰器的函数声明（用于 @Builder、@Extend 等）
     decorated_function_declaration: ($) =>
       seq(
-        repeat1($.decorator), // 至少一个装饰器
+        repeat1(field("decorator", $.decorator)), // 至少一个装饰器
         optional("async"),
         "function",
-        $.identifier,
-        optional($.type_parameters),
-        $.parameter_list,
-        optional(seq(":", $.type_annotation)),
+        field("name", $.identifier),
+        optional(field("type_parameters", $.type_parameters)),
+        field("parameters", $.parameter_list),
+        optional(seq(":", field("return_type", $.type_annotation))),
         choice(
-          prec(2, $.builder_function_body), // 提高优先级，优先尝试解析为 Builder 函数体
-          prec(1, $.extend_function_body), // @Extend 函数体
-          $.block_statement, // 普通函数体
+          field("body", prec(2, $.builder_function_body)), // 提高优先级，优先尝试解析为 Builder 函数体
+          field("body", prec(1, $.extend_function_body)), // @Extend 函数体
+          field("body", $.block_statement), // 普通函数体
         ),
       ),
 
@@ -1224,11 +1441,11 @@ module.exports = grammar({
       seq(
         optional("async"),
         "function",
-        $.identifier,
-        optional($.type_parameters),
-        $.parameter_list,
-        optional(seq(":", $.type_annotation)),
-        $.block_statement,
+        field("name", $.identifier),
+        optional(field("type_parameters", $.type_parameters)),
+        field("parameters", $.parameter_list),
+        optional(seq(":", field("return_type", $.type_annotation))),
+        field("body", $.block_statement),
       ),
 
     // @Extend函数的特殊函数体 - 允许直接以修饰符链开始
@@ -1253,14 +1470,19 @@ module.exports = grammar({
         prec(
           1,
           seq(
-            $.identifier,
-            optional($.type_parameters),
-            $.parameter_list,
-            optional(seq(":", $.type_annotation)),
+            field("name", $.identifier),
+            optional(field("type_parameters", $.type_parameters)),
+            field("parameters", $.parameter_list),
+            optional(seq(":", field("return_type", $.type_annotation))),
           ),
         ),
         // 属性签名
-        seq($.identifier, optional("?"), ":", $.type_annotation),
+        seq(
+          field("name", $.identifier),
+          optional("?"),
+          ":",
+          field("type", $.type_annotation),
+        ),
       ),
 
     // 数组字面量
@@ -1269,9 +1491,12 @@ module.exports = grammar({
         "[",
         commaSep(
           optional(
-            choice(
-              $.expression,
-              seq("...", $.expression), // 支持展开语法
+            field(
+              "element",
+              choice(
+                $.expression,
+                seq("...", field("argument", $.expression)), // 支持展开语法
+              ),
             ),
           ),
         ),
@@ -1282,7 +1507,7 @@ module.exports = grammar({
     object_literal: ($) =>
       seq(
         "{",
-        commaSep($.property_assignment),
+        commaSep(field("property", $.property_assignment)),
         optional(","), // 支持尾随逗号
         "}",
       ),
@@ -1293,16 +1518,19 @@ module.exports = grammar({
         // 对象方法（包括 async）
         seq(
           optional("async"),
-          $.property_name,
-          optional($.type_parameters),
-          $.parameter_list,
-          optional(seq(":", $.type_annotation)),
-          $.block_statement,
+          field("name", $.property_name),
+          optional(field("type_parameters", $.type_parameters)),
+          field("parameters", $.parameter_list),
+          optional(seq(":", field("return_type", $.type_annotation))),
+          field("body", $.block_statement),
         ),
         // 降低优先级，避免与三元表达式冲突
-        prec(-1, seq($.property_name, ":", $.expression)),
-        $.identifier, // 简写属性
-        seq("...", $.expression), // 展开运算符
+        prec(
+          -1,
+          seq(field("key", $.property_name), ":", field("value", $.expression)),
+        ),
+        field("shorthand", $.identifier), // 简写属性
+        seq("...", field("argument", $.expression)), // 展开运算符
       ),
 
     // 属性名
@@ -1322,27 +1550,41 @@ module.exports = grammar({
     template_chars: ($) => /[^`$\\]+|\\./,
 
     // 模板替换
-    template_substitution: ($) => seq("$", "{", $.expression, "}"),
+    template_substitution: ($) =>
+      seq("$", "{", field("expression", $.expression), "}"),
 
     // 资源表达式 $r() - 支持多个参数（资源ID + 插值参数）
     resource_expression: ($) =>
       seq(
         "$r",
         "(",
-        commaSep($.expression), // 支持多个参数
+        commaSep(field("argument", $.expression)), // 支持多个参数
         ")",
       ),
 
     // 更新表达式 ++/--
     update_expression: ($) =>
       choice(
-        prec.left(22, seq($.expression, choice("++", "--"))),
-        prec.right(22, seq(choice("++", "--"), $.expression)),
+        prec.left(
+          22,
+          seq(
+            field("argument", $.expression),
+            field("operator", choice("++", "--")),
+          ),
+        ),
+        prec.right(
+          22,
+          seq(
+            field("operator", choice("++", "--")),
+            field("argument", $.expression),
+          ),
+        ),
       ),
 
     // 非空断言表达式 - TypeScript/ArkTS 特有的后置运算符
     // 用于告诉编译器某个值不为 null 或 undefined
-    non_null_assertion_expression: ($) => prec.left(22, seq($.expression, "!")),
+    non_null_assertion_expression: ($) =>
+      prec.left(22, seq(field("expression", $.expression), "!")),
 
     // new表达式 - 支持泛型实例化
     new_expression: ($) =>
@@ -1350,9 +1592,9 @@ module.exports = grammar({
         21,
         seq(
           "new",
-          $.expression,
-          optional($.type_arguments), // 支持泛型参数，如 new Class<T>()
-          optional(seq("(", commaSep($.expression), ")")),
+          field("constructor", $.expression),
+          optional(field("type_arguments", $.type_arguments)), // 支持泛型参数，如 new Class<T>()
+          optional(field("arguments", seq("(", commaSep($.expression), ")"))),
         ),
       ),
   },
