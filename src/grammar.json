@@ -4144,10 +4144,6 @@
         {
           "type": "SYMBOL",
           "name": "block_statement"
-        },
-        {
-          "type": "SYMBOL",
-          "name": "_non_brace_content"
         }
       ]
     },

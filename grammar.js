@@ -904,9 +904,6 @@ module.exports = grammar({
 
         // 嵌套块语句
         $.block_statement,
-
-        // 其他内容（处理注释、空白等）
-        $._non_brace_content,
       ),
 
     statement: ($) =>
