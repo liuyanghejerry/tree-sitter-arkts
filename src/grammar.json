@@ -1301,11 +1301,19 @@
             "members": [
               {
                 "type": "SYMBOL",
-                "name": "block_statement"
+                "name": "arkts_ui_element"
               },
               {
                 "type": "SYMBOL",
-                "name": "_non_brace_content"
+                "name": "ui_control_flow"
+              },
+              {
+                "type": "SYMBOL",
+                "name": "expression_statement"
+              },
+              {
+                "type": "SYMBOL",
+                "name": "block_statement"
               }
             ]
           }
@@ -1800,11 +1808,19 @@
             "members": [
               {
                 "type": "SYMBOL",
-                "name": "block_statement"
+                "name": "arkts_ui_element"
               },
               {
                 "type": "SYMBOL",
-                "name": "_non_brace_content"
+                "name": "ui_control_flow"
+              },
+              {
+                "type": "SYMBOL",
+                "name": "expression_statement"
+              },
+              {
+                "type": "SYMBOL",
+                "name": "block_statement"
               }
             ]
           }
@@ -4028,22 +4044,110 @@
         {
           "type": "REPEAT",
           "content": {
-            "type": "CHOICE",
-            "members": [
-              {
-                "type": "SYMBOL",
-                "name": "block_statement"
-              },
-              {
-                "type": "SYMBOL",
-                "name": "_non_brace_content"
-              }
-            ]
+            "type": "SYMBOL",
+            "name": "_statement"
           }
         },
         {
           "type": "STRING",
           "value": "}"
+        }
+      ]
+    },
+    "_statement": {
+      "type": "CHOICE",
+      "members": [
+        {
+          "type": "SYMBOL",
+          "name": "if_statement"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "for_statement"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "while_statement"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "break_statement"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "continue_statement"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "variable_declaration"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "function_declaration"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "class_declaration"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "interface_declaration"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "enum_declaration"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "type_declaration"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "decorated_function_declaration"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "decorated_export_declaration"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "try_statement"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "throw_statement"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "ui_control_flow"
+        },
+        {
+          "type": "PREC",
+          "value": 1,
+          "content": {
+            "type": "SYMBOL",
+            "name": "arkts_ui_element"
+          }
+        },
+        {
+          "type": "SYMBOL",
+          "name": "expression_statement"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "return_statement"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "ui_custom_component_statement"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "block_statement"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "_non_brace_content"
         }
       ]
     },
@@ -4708,17 +4812,8 @@
         {
           "type": "REPEAT",
           "content": {
-            "type": "CHOICE",
-            "members": [
-              {
-                "type": "SYMBOL",
-                "name": "block_statement"
-              },
-              {
-                "type": "SYMBOL",
-                "name": "_non_brace_content"
-              }
-            ]
+            "type": "SYMBOL",
+            "name": "_statement"
           }
         },
         {
@@ -5604,17 +5699,8 @@
           {
             "type": "REPEAT",
             "content": {
-              "type": "CHOICE",
-              "members": [
-                {
-                  "type": "SYMBOL",
-                  "name": "block_statement"
-                },
-                {
-                  "type": "SYMBOL",
-                  "name": "_non_brace_content"
-                }
-              ]
+              "type": "SYMBOL",
+              "name": "_statement"
             }
           },
           {
@@ -5703,17 +5789,8 @@
           {
             "type": "REPEAT",
             "content": {
-              "type": "CHOICE",
-              "members": [
-                {
-                  "type": "SYMBOL",
-                  "name": "block_statement"
-                },
-                {
-                  "type": "SYMBOL",
-                  "name": "_non_brace_content"
-                }
-              ]
+              "type": "SYMBOL",
+              "name": "_statement"
             }
           },
           {
@@ -6634,6 +6711,10 @@
     [
       "conditional_expression",
       "conditional_type"
+    ],
+    [
+      "ui_if_statement",
+      "_statement"
     ]
   ],
   "precedences": [],
