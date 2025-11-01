@@ -8,3 +8,7 @@ struct BasicArkUITest {
     this.count++;
   }
 }
+
+function some_function() {
+  console.log("Hello, World!");
+}

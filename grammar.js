@@ -877,7 +877,7 @@ module.exports = grammar({
     type_arguments: ($) =>
       seq(
         "<",
-        commaSep($.type_annotation), // 类型参数可以是任意类型注解
+        field("name", commaSep($.type_annotation)), // 类型参数可以是任意类型注解
         ">",
       ),
 
